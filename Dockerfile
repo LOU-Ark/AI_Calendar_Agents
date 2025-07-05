@@ -14,6 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # アプリケーションのソースコードをコピー
 COPY . .
 
-# Gunicornを起動するための設定
-# Cloud Runが提供するPORT環境変数をリッスンする
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app:app
+# docker-entrypoint.shに実行権限を付与
+RUN chmod +x /app/docker-entrypoint.sh
+
+# ポート5001を公開
+EXPOSE 5001
+
+# docker-entrypoint.shを起動コマンドとして設定
+CMD ["/app/docker-entrypoint.sh"]

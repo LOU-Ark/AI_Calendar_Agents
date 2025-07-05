@@ -75,4 +75,10 @@ def upload_knowledge():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    print("======================================================")
+    print("  AI Calendar Agent is ready!")
+    print("")
+    print("  Access it at: http://localhost:5001")
+    print("  (Press Ctrl+C to stop the container)")
+    print("======================================================")
+    app.run(host="0.0.0.0", debug=True, port=5001)
