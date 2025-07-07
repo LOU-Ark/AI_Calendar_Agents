@@ -1,56 +1,82 @@
+// static/js/script.js
 document.addEventListener('DOMContentLoaded', () => {
     const chatForm = document.getElementById('chat-form');
     const userInput = document.getElementById('user-input');
     const chatBox = document.getElementById('chat-box');
+    const statusIndicator = document.getElementById('status-indicator'); // 追加
+
+    let isFinalAnswerReceived = false;
 
     chatForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const message = userInput.value.trim();
         if (!message) return;
 
-        // ユーザーのメッセージを表示
         addMessage(message, 'user');
         userInput.value = '';
-        userInput.disabled = true; // 入力欄を一時的に無効化
-        chatForm.querySelector('button').disabled = true; // 送信ボタンも無効化
-
-        // ローディング表示
-        addLoadingIndicator();
+        userInput.disabled = true;
+        chatForm.querySelector('button').disabled = true;
+        // スピナー付きで初期ステータスを表示
+        const spinnerHtml = '<div class="loading-spinner"></div>';
+        statusIndicator.innerHTML = `${spinnerHtml} <span>アークに応答を依頼中...</span>`;
 
         try {
-            const response = await fetch('/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ message: message }),
+            const eventSource = new EventSourcePolyfill('/api/chat', {
+                headers: { 'Content-Type': 'application/json' },
+                payload: JSON.stringify({ message: message }),
+                method: 'POST'
             });
-            const data = await response.json();
-            
-            removeLoadingIndicator();
-            handleAiResponse(data);
+            eventSource.onmessage = function(event) {
+                removeLoadingIndicator && removeLoadingIndicator();
+                const data = JSON.parse(event.data);
+                handleAiResponse(data);
+            };
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                statusIndicator.innerHTML = ''; // ステータスをクリア
+                if (isFinalAnswerReceived) {
+                    console.log("Stream closed normally after final answer.");
+                } else {
+                    addMessage('AIとの通信中にエラーが発生しました。', 'ai');
+                    // エラー時もUIを有効化
+                    userInput.disabled = false;
+                    chatForm.querySelector('button').disabled = false;
+                    userInput.focus();
+                }
+                removeLoadingIndicator && removeLoadingIndicator();
+                eventSource.close();
+            };
         } catch (error) {
-            removeLoadingIndicator();
+            statusIndicator.innerHTML = ''; // ステータスをクリア
             addMessage('エラーが発生しました。サーバーが起動しているか確認してください。', 'ai');
-            console.error('Error:', error);
-        } finally {
-            userInput.disabled = false; // 入力欄を再度有効化
-            chatForm.querySelector('button').disabled = false; // 送信ボタンも有効化
+            userInput.disabled = false;
+            chatForm.querySelector('button').disabled = false;
             userInput.focus();
         }
     });
 
     function handleAiResponse(data) {
-        if (data.type === 'text') {
-            // 予定リストJSONが含まれていれば整形して表示
-            const eventList = extractEventListFromText(data.content);
-            if (eventList.length > 0) {
-                addEventListMessage(eventList);
-            } else {
-                addMessage(data.content, 'ai');
-            }
-        } else if (data.type === 'delete_candidates') {
-            addMessageWithDeleteOptions(data.message, data.content);
+        const spinnerHtml = '<div class="loading-spinner"></div>';
+
+        if (data.status === 'thinking') {
+            statusIndicator.innerHTML = `${spinnerHtml} <span>アークが考え中です...</span>`;
+        } else if (data.status === 'tool_running') {
+            statusIndicator.innerHTML = `${spinnerHtml} <span>アークがカレンダーを調べています...</span>`;
+        } else if (data.status === 'final_answer') {
+            statusIndicator.innerHTML = ''; // ステータスをクリア
+            addMessage(data.message, 'ai');
+            isFinalAnswerReceived = true; // ★★★ 最終応答を受信したらフラグを立てる
+            // UIのロックを解除
+            userInput.disabled = false;
+            chatForm.querySelector('button').disabled = false;
+            userInput.focus();
+        } else if (data.reply) {
+            statusIndicator.innerHTML = ''; // ステータスをクリア
+            addMessage(data.reply, 'ai');
+            // UIのロックを解除
+            userInput.disabled = false;
+            chatForm.querySelector('button').disabled = false;
+            userInput.focus();
         }
     }
 
@@ -152,22 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
     
-    function addLoadingIndicator() {
-        const loadingElement = document.createElement('div');
-        loadingElement.classList.add('message', 'ai-message');
-        loadingElement.id = 'loading';
-        loadingElement.innerHTML = '<div class="loading-spinner"></div><span style="margin-left:0.5em;">AIが考え中...</span>';
-        chatBox.appendChild(loadingElement);
-        scrollToBottom();
-    }
-
-    function removeLoadingIndicator() {
-        const loadingElement = document.getElementById('loading');
-        if (loadingElement) {
-            loadingElement.remove();
-        }
-    }
-
     function scrollToBottom() {
         chatBox.scrollTop = chatBox.scrollHeight;
     }
@@ -178,3 +188,41 @@ document.addEventListener('DOMContentLoaded', () => {
         gcalBtn.remove();
     }
 });
+
+// EventSourceのPOST対応Polyfill（fetch-SSEやevent-source-polyfill等を利用、または自作）
+// ここでは簡易実装例を追加
+window.EventSourcePolyfill = function(url, options) {
+    // POSTでSSEを使うためのPolyfill（fetchでSSEストリームを受信）
+    const controller = new AbortController();
+    const listeners = {};
+    fetch(url, {
+        method: options.method || 'POST',
+        headers: options.headers || {},
+        body: options.payload || null,
+        signal: controller.signal
+    }).then(async res => {
+        const reader = res.body.getReader();
+        let buffer = '';
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += new TextDecoder().decode(value);
+            let idx;
+            while ((idx = buffer.indexOf('\n\n')) !== -1) {
+                const chunk = buffer.slice(0, idx);
+                buffer = buffer.slice(idx + 2);
+                if (chunk.startsWith('data: ')) {
+                    const data = chunk.slice(6);
+                    if (listeners['message']) listeners['message']({ data });
+                }
+            }
+        }
+    }).catch(err => {
+        if (listeners['error']) listeners['error'](err);
+    });
+    this.onmessage = null;
+    this.onerror = null;
+    listeners['message'] = (e) => { if (this.onmessage) this.onmessage(e); };
+    listeners['error'] = (e) => { if (this.onerror) this.onerror(e); };
+    this.close = () => controller.abort();
+};

@@ -1,5 +1,18 @@
 import os
 
+# src/calendar_agent/knowledge_handler.py
+import os
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+USER_PERSONA_PATH = os.path.join(PROJECT_ROOT, 'knowledge', 'ryo-persona.txt') # ファイル名を確認
+
+def get_user_profile() -> str:
+    try:
+        with open(USER_PERSONA_PATH, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "ユーザーの特別な特性に関する情報はありません。"
+    
 def load_knowledge_texts(knowledge_dir=None):
     """
     knowledgeディレクトリ内のテキスト/ドキュメント系ファイルを読み込み、

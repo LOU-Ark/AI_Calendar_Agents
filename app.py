@@ -1,23 +1,45 @@
-from flask import Flask, render_template, request, jsonify
-from src.calendar_agent.agent import CalendarAgent
+# src/app.py
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from src.core.orchestrator import Orchestrator
 import json
 import os
+import time
 
 app = Flask(__name__)
-agent = CalendarAgent()
+orchestrator = Orchestrator()
 
 @app.route("/")
 def index():
-    start_message = agent.start_message()
-    return render_template("index.html", start_message=start_message)
+    return render_template("index.html")
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    user_input = request.json.get("message")
-    if not user_input:
-        return jsonify({"error": "メッセージがありません"}), 400
-    response_data = agent.send_message_for_ui(user_input)
-    return jsonify(response_data)
+@app.route('/api/chat', methods=['POST'])
+def chat_api():
+    data = request.get_json()
+    user_message = data.get('message', '')
+    if not user_message:
+        return Response("Error: メッセージがありません", status=400)
+
+    def generate_stream():
+        print("[APP] generate_stream を開始します。")
+        
+        response_generator = None # 先に変数を定義
+        try:
+            response_generator = orchestrator.run_chat_stream(user_message)
+            for response_part in response_generator:
+                formatted_data = f"data: {json.dumps(response_part, ensure_ascii=False)}\n\n"
+                yield formatted_data
+                time.sleep(0.1)
+            # ★★★ forループが正常に完了した場合のログ ★★★
+            print("[APP] forループが正常に完了しました。")
+        except Exception as e:
+            print(f"[APP] generate_stream でエラーが発生: {e}")
+            error_data = {"status": "error", "message": "サーバー内部でエラーが発生しました。"}
+            formatted_error = f"data: {json.dumps(error_data)}\n\n"
+            yield formatted_error
+        finally:
+            # ★★★ ストリームが正常終了しても、エラーで終了しても、必ずここが実行される ★★★
+            print("[APP] finallyブロックが実行されました。ストリームを終了します。")
+    return Response(generate_stream(), mimetype='text/event-stream')
 
 @app.route("/delete_event", methods=["POST"])
 def delete_event():

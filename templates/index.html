@@ -1,3 +1,4 @@
+<!-- template/index.html -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -7,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
     <style>
         * {
             margin: 0;
@@ -523,6 +525,7 @@
             }
         }
     </style>
+    <script src="/static/js/script.js"></script>
 </head>
 <body>
     <div class="chat-container">
@@ -535,7 +538,7 @@
                 <p>こんにちは！AI Calendar Assistantです。スケジュール管理でお手伝いします。何かご質問はありますか？</p>
             </div>
         </div>
-        
+        <div id="status-indicator" class="status-indicator" style="padding:0 32px;height:24px;color:#a0a0a0;"></div>
         <div class="chat-input-area">
             <form id="chat-form">
                 <input type="text" id="user-input" placeholder="メッセージを入力..." autocomplete="off">
@@ -758,37 +761,7 @@
         }
 
         // --- チャット機能（script.jsのロジックを統合） ---
-        const chatForm = document.getElementById('chat-form');
-        const userInput = document.getElementById('user-input');
-        const chatBox = document.getElementById('chat-box');
-
-        chatForm.onsubmit = async (e) => {
-            e.preventDefault();
-            const message = userInput.value.trim();
-            if (!message) return;
-            addMessage(message, 'user');
-            userInput.value = '';
-            userInput.disabled = true;
-            chatForm.querySelector('button').disabled = true;
-            addLoadingIndicator();
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
-                });
-                const data = await response.json();
-                removeLoadingIndicator();
-                handleAiResponse(data);
-            } catch (error) {
-                removeLoadingIndicator();
-                addMessage('エラーが発生しました。サーバーが起動しているか確認してください。', 'ai');
-            } finally {
-                userInput.disabled = false;
-                chatForm.querySelector('button').disabled = false;
-                userInput.focus();
-            }
-        };
+        // ここにあったchatForm.onsubmit = async ... のfetch('/api/chat', ...)ロジックを削除
 
         function handleAiResponse(data) {
             if (data.type === 'text') {
