@@ -2,7 +2,7 @@
 
 自然言語での対話を通じて、あなたの価値観や生活スタイルに合わせてスケジュールを提案・管理してくれる、パーソナルAIアシスタントです。
 
-![UI Screenshot](https://raw.githubusercontent.com/LOU-Ark/AI_Calendar_Agents/main/docs/ui_screenshot.png) <!-- ここにUIのスクリーンショット画像のパスを記載 -->
+![UI Screenshot](https://raw.githubusercontent.com/LOU-Ark/AI_Calendar_Agents/docs/ui_screenshot.png) <!-- ここにUIのスクリーンショット画像のパスを記載 -->
 
 ## 🌟 プロジェクトの核心的特徴
 
