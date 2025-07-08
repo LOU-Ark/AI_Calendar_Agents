@@ -21,23 +21,17 @@ def chat_api():
 
     def generate_stream():
         print("[APP] generate_stream を開始します。")
-        
-        response_generator = None # 先に変数を定義
         try:
-            response_generator = orchestrator.run_chat_stream(user_message)
+            response_generator = orchestrator.run_multi_agent_session_stream(user_message)
             for response_part in response_generator:
                 formatted_data = f"data: {json.dumps(response_part, ensure_ascii=False)}\n\n"
                 yield formatted_data
-                time.sleep(0.1)
-            # ★★★ forループが正常に完了した場合のログ ★★★
-            print("[APP] forループが正常に完了しました。")
+            print("[APP] ストリームが正常に完了しました。")
         except Exception as e:
             print(f"[APP] generate_stream でエラーが発生: {e}")
             error_data = {"status": "error", "message": "サーバー内部でエラーが発生しました。"}
-            formatted_error = f"data: {json.dumps(error_data)}\n\n"
-            yield formatted_error
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
         finally:
-            # ★★★ ストリームが正常終了しても、エラーで終了しても、必ずここが実行される ★★★
             print("[APP] finallyブロックが実行されました。ストリームを終了します。")
     return Response(generate_stream(), mimetype='text/event-stream')
 

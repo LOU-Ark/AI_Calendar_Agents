@@ -10,7 +10,7 @@ from src.calendar_agent import tools
 
 class AKAgent:
     def __init__(self, user_profile: str):
-        persona_path = os.path.join(os.path.dirname(__file__), 'persona.md')
+        persona_path = os.path.join(os.path.dirname(__file__), 'ak-persona.md')
         with open(persona_path, 'r', encoding='utf-8') as f:
             self.persona = f.read()
         
@@ -33,71 +33,102 @@ class AKAgent:
             raise e
 
     def chat_generator(self, user_message: str):
-        FULL_PROMPT_LOGGING = False
-        last_ai_thought = ""
+        history = []
         
-        # ★★★ 履歴(context)の管理を修正 ★★★
-        # 履歴はReActループの外で一貫して管理する
-        # 最初のユーザーメッセージでコンテキストを開始
-        context = f"ユーザー: {user_message}"
-        print(f"[ReAct] ユーザー入力: {user_message}")
-
-        for _ in range(5): # 最大5回のReActループ
+        # ★★★ 修正ポイント1: 無限ループを防ぐため、whileをforに変更 ★★★
+        for _ in range(5): # 最大5回の思考ループ（安全対策）
             try:
-                yield { "status": "thinking", "message": "（アークが考え中です...）", "log": "..." }
+                # プロンプト構築、Gemini呼び出し
+                # (注: _build_react_prompt は存在しないため、既存の _build_user_prompt を使用します)
                 
-                user_prompt = self._build_user_prompt(context)
-                
-                if FULL_PROMPT_LOGGING:
-                    print(f"[ReAct] ユーザープロンプト全文:\n{user_prompt}")
-                else:
-                    print("[ReAct] ユーザープロンプトを生成しました。")
+                # ★★★ ウィンドウイングの適用 ★★★
+                # 対話履歴が長くなりすぎるのを防ぐため、最新10件のやりとりのみをプロンプトに含める
+                WINDOW_SIZE = 10 
+                recent_history = history[-WINDOW_SIZE:]
 
-                ai_response = self._call_gemini(user_prompt)
-                print(f"[ReAct] Gemini応答:\n{ai_response}")
+                context_for_prompt = "\n".join([f"{k}: {v}" for h in recent_history for k, v in h.items()])
+                if not history:
+                    context_for_prompt = f"ユーザー: {user_message}"
                 
-                context += f"\nアーク: {ai_response}" # 履歴にAIの思考全体を追加
+                react_prompt = self._build_user_prompt(context_for_prompt)
+                ai_response = self._call_gemini(react_prompt)
+                
+                if not history:
+                    history.append({"user": user_message})
+                history.append({"ai": ai_response})
 
-                thought_match = re.search(r"Thought: ([\s\S]*?)(?=\nAction:)", ai_response)
-                if thought_match:
-                    last_ai_thought = thought_match.group(1).strip()
-                
                 parsed = self._parse_ai_response(ai_response)
-                print(f"[ReAct] 解析結果: {parsed}")
+                
+                # ★★★ 修正ポイント2: actionの存在を安全にチェック ★★★
+                action = parsed.get('action')
 
-                if parsed.get('action') == 'FinalAnswer':
-                    final_message = str(parsed.get('final_answer', '...'))
+                if action == 'FinalAnswer':
+                    final_message = parsed.get('final_answer', 'うまく言葉にできませんでした。')
                     yield {
                         "status": "final_answer",
                         "message": final_message,
                         "log": f"アーク：Final Answer: {final_message}"
                     }
-                    print("[AGENT] FinalAnswerをyieldしました。ジェネレータを正常に終了します。")
+                    # ★★★ 修正ポイント3: ジェネレータをここで明示的に終了させる！ ★★★
+                    print("[AGENT] FinalAnswerを検知。ジェネレータを正常に終了します。")
                     return
 
-                tool_name = parsed.get('action')
-                tool_input = parsed.get('action_input', {})
-
-                if not tool_name or tool_name in ['ParsingError', 'ToolError']:
-                     context += f"\n[システムエラー] AIの応答形式が不正です。修正してください。"
-                     continue # パースエラーの場合は、再度AIに思考させる
-
-                yield { "status": "tool_running", "message": f"ツール『{tool_name}』を実行中...", "log": "..."}
-                
-                tool_result = self._run_tool(tool_name, tool_input)
-                print(f"[ReAct] ツール実行結果: {tool_result}")
-                
-                context += f"\n[ツール実行: {tool_name}]\n[ツール結果: {tool_result}]" # ツール実行結果も履歴に追加
+                elif action and action != 'ParsingError' and action != 'ToolError':
+                    # ツール実行のロジック
+                    tool_name = action
+                    tool_input = parsed.get('action_input', {})
+                    yield { "status": "tool_running", "message": f"ツール『{tool_name}』を実行中...", "log": f"ツール実行: {tool_name}({tool_input})"}
+                    tool_result = self._run_tool(tool_name, tool_input)
+                    history.append({"tool": tool_name, "result": tool_result})
+                else:
+                    # パースエラーなどの場合は、それを伝えて終了
+                    error_message = parsed.get('action_input', 'AIの応答を解析できませんでした。')
+                    yield { "status": "final_answer", "message": f"申し訳ありません、少し混乱しているようです。エラー: {error_message}", "log": "パースエラーにより終了します。" }
+                    return
 
             except Exception as e:
-                print(f"[AGENT ERROR] chat_generatorでエラー: {e}")
+                print(f"[AGENT ERROR] chat_generatorでエラーが発生: {e}")
                 import traceback
                 traceback.print_exc()
                 yield {"status": "error", "message": "エージェント内部でエラーが発生しました。"}
                 return
 
-        # ループ上限到達時の処理 (変更なし)
-        # ...
+        # ループが5回に達した場合のフォールバック
+        yield { "status": "final_answer", "message": "うーん、少し考えがまとまらないようです。もう少し簡単な言葉で指示をいただけますか？", "log": "ループ回数上限に到達。" }
+
+    def get_initial_idea(self, user_message: str) -> str:
+        """
+        複雑なツール使用はせず、自分のペルソナとユーザープロファイルに基づいて最初のアイデアだけを簡潔に返す
+        """
+        print("[AK AGENT] 最初のアイデアを生成中...")
+        prompt = f"""
+        # あなたのペルソナ:
+        {self.persona}
+
+        # サポート対象のユーザープロファイル:
+        {self.user_profile}
+
+        # ユーザーからの依頼:
+        {user_message}
+
+        # 指示:
+        あなたのペルソナとユーザーの特性を考慮して、この依頼に対する最初のアイデアやアプローチを、箇条書きで簡潔に述べてください。
+        ツール使用や複雑な思考は不要です。あくまで最初のブレインストーミングの素材としてください。
+        """
+        response = self.chat.send_message(prompt)
+        return response.text
+
+    def generate_final_response(self, prompt: str) -> str:
+        """
+        ReActループを使わず、与えられたプロンプトに対して単純に応答を生成する。
+        Orchestratorが最終的な提案をまとめる際に使用する。
+        """
+        print("[AK AGENT] 最終応答を生成中...")
+        # 既存のself.chatはReActループで状態が変化している可能性があるため、
+        # 新しいチャットセッションをここで開始する方が安全。
+        response_chat = self.client.chats.create(model=config.MODEL_NAME)
+        response = response_chat.send_message(prompt)
+        return response.text
 
     def _build_system_prompt(self) -> str:
         tools_description = """
@@ -152,34 +183,47 @@ Action Input: （Actionがツールの場合は、引数を**必ずJSON形式の
             return "Thought: Gemini APIエラーが発生しました。\nAction: FinalAnswer\nAction Input: 申し訳ありません、AI側でエラーが発生しました。"
 
     def _parse_ai_response(self, ai_response: str) -> dict:
-        action = None
-        action_input_str = ""
-        is_capturing_input = False
-        for line in ai_response.splitlines():
-            if line.startswith("Action:"):
-                action = line.replace("Action:", "").strip()
-                is_capturing_input = False
-            elif line.startswith("Action Input:"):
-                action_input_str = line.replace("Action Input:", "").strip()
-                is_capturing_input = True
-            elif is_capturing_input:
-                action_input_str += "\n" + line
-        action_input_str = action_input_str.strip()
-        if action == "FinalAnswer":
-            return {"action": "FinalAnswer", "final_answer": action_input_str}
-        if action and action_input_str:
-            try:
+        """
+        AI応答を解析し、Action/Action Input/FinalAnswerを抽出。
+        複数行や不正なJSONにも対応。
+        """
+        try:
+            action, action_input_str = None, ""
+            is_capturing_input = False
+
+            for line in ai_response.splitlines():
+                if line.startswith("Action:"):
+                    action = line.replace("Action:", "").strip()
+                    is_capturing_input = False
+                elif line.startswith("Action Input:"):
+                    action_input_str = line.replace("Action Input:", "").strip()
+                    is_capturing_input = True
+                elif is_capturing_input:
+                    action_input_str += "\n" + line
+            
+            action_input_str = action_input_str.strip()
+
+            if action == "FinalAnswer":
+                return {"action": "FinalAnswer", "final_answer": action_input_str}
+
+            if action:
                 match = re.search(r"\{.*\}", action_input_str, re.DOTALL)
                 if match:
                     parsed_input = json.loads(match.group(0))
                     return {"action": action, "action_input": parsed_input}
                 else:
-                    raise json.JSONDecodeError("JSON object not found", action_input_str, 0)
-            except json.JSONDecodeError as e:
-                print(f"[PARSING ERROR] {e}")
-                return {"action": "ToolError", "action_input": f"Invalid JSON format: {action_input_str}"}
-        print(f"[PARSING WARNING] Could not parse action: {ai_response}")
-        return {"action": "ParsingError", "action_input": "Could not parse AI response."}
+                    # JSONが見つからない場合もエラーとして扱う
+                    raise json.JSONDecodeError("JSON object not found in Action Input", action_input_str, 0)
+            
+            # Action自体が見つからなかった場合
+            return {"action": "ParsingError", "action_input": "Action not found in AI response."}
+
+        except json.JSONDecodeError as e:
+            print(f"[PARSING ERROR] Failed to parse JSON: {action_input_str} - Error: {e}")
+            return {"action": "ParsingError", "action_input": f"Invalid JSON from AI: {action_input_str}"}
+        except Exception as e:
+            print(f"[PARSING ERROR] Unexpected error: {e}")
+            return {"action": "ParsingError", "action_input": "An unexpected error occurred during parsing."}
 
     def _run_tool(self, tool_name: str, tool_args: dict) -> str:
         print(f"[ReAct] ツール呼び出し: {tool_name} 入力: {tool_args}")
