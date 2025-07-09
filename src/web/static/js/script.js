@@ -1,4 +1,4 @@
-//  static/js/script.js
+// static/js/script.js
 document.addEventListener('DOMContentLoaded', () => {
     // --- HTML要素の取得 ---
     const chatForm = document.getElementById('chat-form');
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addMessage(message, 'user', 'あなた');
             userInput.value = '';
             lockUi();
-            startChatStream(message); // ストリーミング処理を開始
+            startChatStream(message);
         });
     }
 
@@ -34,14 +34,12 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.focus();
     }
     
-    // ★★★★★ ここを全面的に書き換えます ★★★★★
+    // --- サーバー通信関数 ---
     async function startChatStream(message) {
         try {
             const response = await fetch('/api/chat', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: message }),
             });
 
@@ -49,24 +47,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(`Server responded with ${response.status}`);
             }
 
-            // ストリームを読み取るためのリーダーを取得
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
             let buffer = '';
 
-            // データを少しずつ読み取るループ
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) {
-                    // ストリームが正常に終了した
-                    console.log("Stream finished.");
                     break;
                 }
-
-                // 受信したデータを文字列に変換し、バッファに追加
                 buffer += decoder.decode(value, { stream: true });
                 
-                // バッファからSSEメッセージ形式（"data: {...}\n\n"）を抽出
                 let idx;
                 while ((idx = buffer.indexOf('\n\n')) !== -1) {
                     const line = buffer.slice(0, idx);
@@ -83,12 +74,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-
         } catch (error) {
             console.error("Chat stream failed:", error);
             addMessage('AIとの通信に失敗しました。', 'system', 'システム');
         } finally {
-            // 正常終了でもエラーでも、最後にUIをアンロックする
             unlockUi();
         }
     }
@@ -101,9 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStatusIndicator(data.message);
         } else if (data.status === 'agent_opinion') {
             updateStatusIndicator('議論をまとめています...'); 
-            addAgentOpinionMessage(speakerName, data.message);
+            addAgentOpinionMessage(speakerName, data.message, data.speaker); // speakerIdを渡す
         } else if (data.status === 'final_answer') {
-            // 最終応答の場合は、ステータス表示を消してからメッセージを表示
             updateStatusIndicator('');
             addMessage(data.message, data.speaker, speakerName);
         }
@@ -117,35 +105,57 @@ document.addEventListener('DOMContentLoaded', () => {
         return names[speakerId] || 'AI';
     }
 
+    // ★★★★★ ここからが主要な修正箇所 ★★★★★
+
     function addMessage(message, speakerId, speakerName) {
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', `${speakerId}-message`);
         
-        let html = '';
-        if (speakerId !== 'user') {
-            html += `<div class="speaker-name">${speakerName}</div>`;
-        }
-        html += `<p>${message.replace(/\n/g, '<br>')}</p>`;
+        // アイコン要素を生成
+        const iconHtml = `<div class="message-icon" style="background-image: url('/static/images/${speakerId}.png');"></div>`;
         
-        messageElement.innerHTML = html;
+        // コンテンツ要素を生成
+        let contentHtml = '<div class="message-content">';
+        if (speakerId !== 'user') {
+            contentHtml += `<div class="speaker-name">${speakerName}</div>`;
+        }
+        // 【課題2解決策】marked.js を使ってマークダウンをHTMLに変換
+        const parsedMessage = marked.parse(message);
+        contentHtml += `<div class="message-body">${parsedMessage}</div>`;
+        contentHtml += '</div>';
+        
+        // ユーザーかAIかでアイコンの表示順序を入れ替える
+        if (speakerId === 'user') {
+            messageElement.innerHTML = contentHtml + iconHtml;
+        } else {
+            messageElement.innerHTML = iconHtml + contentHtml;
+        }
+        
         chatBox.appendChild(messageElement);
         scrollToBottom();
     }
     
-    function addAgentOpinionMessage(speakerName, message) {
+    function addAgentOpinionMessage(speakerName, message, speakerId) {
         const messageElement = document.createElement('div');
         messageElement.classList.add('message', 'agent-opinion-message');
         
-        const summary = (message.length > 150) ? message.substring(0, 150) + '...' : message;
+        // アイコン要素を生成
+        const iconHtml = `<div class="message-icon" style="background-image: url('/static/images/${speakerId}.png');"></div>`;
 
-        let html = `<div class="agent-opinion-header">${speakerName}の意見：</div>`;
-        html += `<div class.agent-opinion-body">${summary.replace(/\n/g, '<br>')}</div>`;
-        
-        messageElement.innerHTML = html;
+        // コンテンツ要素を生成
+        let contentHtml = '<div class="message-content">';
+        contentHtml += `<div class="agent-opinion-header">${speakerName}の意見：</div>`;
+        // 【課題2解決策】こちらもマークダウン対応
+        const parsedMessage = marked.parse(message);
+        contentHtml += `<div class="agent-opinion-body">${parsedMessage}</div>`;
+        contentHtml += '</div>';
+
+        messageElement.innerHTML = iconHtml + contentHtml;
         chatBox.appendChild(messageElement);
         scrollToBottom();
     }
 
+    // ... (updateStatusIndicator, scrollToBottom は変更なし) ...
     function updateStatusIndicator(text) {
         if (!statusIndicator) return;
         if (text) {

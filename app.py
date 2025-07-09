@@ -1,12 +1,28 @@
 # src/app.py
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
-from src.core.orchestrator import Orchestrator
+from pathlib import Path
+import sys
 import json
 import os
 import time
 
-app = Flask(__name__)
-orchestrator = Orchestrator()
+# 1. このファイル(app.py)の絶対パスを基準に、プロジェクトのルートディレクトリを決定
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+# 2. 'src'ディレクトリをPythonの検索パスに追加
+#    これにより、`from src.core...`のようなインポートが安定する
+sys.path.append(str(PROJECT_ROOT))
+
+# 3. 必要なモジュールをインポート
+from src.core.orchestrator import Orchestrator
+
+# --- Flaskアプリケーションのインスタンスを生成 ---
+app = Flask(__name__, 
+            static_folder=str(PROJECT_ROOT / 'src/web/static'),
+            template_folder=str(PROJECT_ROOT / 'src/web/templates'))
+
+# 4. Orchestratorを初期化する際に、決定したPROJECT_ROOTを引数として渡す
+orchestrator = Orchestrator(project_root=PROJECT_ROOT)
 
 @app.route("/")
 def index():

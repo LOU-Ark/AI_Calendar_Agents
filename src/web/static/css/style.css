@@ -9,6 +9,7 @@
     --accent-purple: #7c3aed;
     --accent-cyan: #67e8f9;
     --accent-pink: #f472b6;
+    --accent-red: #ef4444; /* エラー/システムメッセージ用 */
     --border-color: #2d2d48;
 }
 
@@ -54,48 +55,101 @@ body {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.5rem; /* メッセージ間の余白を少し広げる */
 }
 
+/* --- ★★★ ここからがアイコン表示のための修正 ★★★ --- */
 .message {
-    max-width: 75%;
+    max-width: 85%;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.user-message {
+    align-self: flex-end;
+    flex-direction: row-reverse; /* ユーザーはアイコンとテキストを反転 */
+}
+
+.ai-message, .ak-message, .ae-message, .oracle-message, .system-message, .agent-opinion-message {
+    align-self: flex-start;
+}
+
+.message-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    flex-shrink: 0; /* アイコンが縮まないようにする */
+    margin-top: 4px; /* テキストとの高さを微調整 */
+}
+
+.message-content {
     padding: 0.8rem 1.2rem;
     border-radius: 18px;
     line-height: 1.6;
 }
-.message p { margin: 0; }
+.message-content p, .message-content ul, .message-content ol { 
+    margin: 0; 
+}
 
-.user-message {
+.user-message .message-content {
     background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
     color: #fff;
-    align-self: flex-end;
     border-bottom-right-radius: 4px;
 }
 
-/* ★★★ AIメッセージの共通スタイル ★★★ */
-.ai-message, .ak-message, .ae-message, .oracle-message, .system-message {
+/* AIメッセージの共通コンテナスタイル */
+.ak-message .message-content, 
+.ae-message .message-content, 
+.oracle-message .message-content, 
+.system-message .message-content {
     background-color: var(--bg-tertiary);
-    align-self: flex-start;
     border-bottom-left-radius: 4px;
     border: 1px solid var(--border-color);
 }
+
 .speaker-name {
     font-weight: 600;
     font-size: 0.9rem;
     margin-bottom: 0.5rem;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* 各話者のテーマカラー */
 .ak-message .speaker-name { color: var(--accent-blue); }
 .ae-message .speaker-name { color: var(--accent-pink); }
 .oracle-message .speaker-name { color: var(--accent-cyan); }
-.system-message .speaker-name { color: #ef4444; }
+.system-message .speaker-name { color: var(--accent-red); }
 
-/* ★★★ 議論の途中経過を表示するスタイル ★★★ */
-.agent-opinion-message {
-    align-self: center;
-    width: 90%;
-    max-width: 90%;
+/* --- ★★★ ここからがマークダウン表示のための修正 ★★★ --- */
+.message-body ul, .message-body ol {
+    padding-left: 1.2em;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+}
+.message-body li {
+    margin-bottom: 0.4em;
+}
+.message-body p {
+    margin-top: 0;
+    margin-bottom: 0.8em;
+}
+.message-body p:last-child {
+    margin-bottom: 0;
+}
+.message-body strong, .message-body b {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+/* --- マークダウン修正ここまで --- */
+
+
+/* --- 議論の途中経過を表示するスタイル --- */
+.agent-opinion-message .message-content {
+    width: 100%;
     background-color: rgba(255, 255, 255, 0.03);
     border-left: 3px solid var(--accent-purple);
 }
@@ -109,6 +163,7 @@ body {
     font-size: 0.9rem;
     opacity: 0.8;
 }
+/* --- 議論の途中経過ここまで --- */
 
 
 .chat-input-area {
@@ -156,7 +211,7 @@ body {
     cursor: not-allowed;
 }
 
-/* ★★★ ステータス表示のスタイル ★★★ */
+/* --- ステータス表示のスタイル --- */
 .status-indicator {
     display: none;
     align-items: center;

@@ -1,4 +1,4 @@
-# src/chat_agent/agent.py
+# src/calendar_agent/agent.py
 
 import google.genai as genai
 import config

@@ -1,4 +1,4 @@
-<!-- templates/index.html -->
+<!-- template/index.html -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -17,9 +17,15 @@
         </div>
         
         <div class="chat-box" id="chat-box">
+            <!-- 初期メッセージの構造を、JavaScriptで生成するものと合わせる -->
             <div class="message oracle-message">
-                <div class="speaker-name">オラクル</div>
-                <p>こんにちは。どのようなご用件でしょうか？</p>
+                <div class="message-icon" style="background-image: url('{{ url_for('static', filename='images/oracle.png') }}');"></div>
+                <div class="message-content">
+                    <div class="speaker-name">オラクル</div>
+                    <div class="message-body">
+                        <p>こんにちは。どのようなご用件でしょうか？</p>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -34,10 +40,12 @@
         </div>
     </div>
 
-    <!-- 外部JavaScriptファイルの読み込み -->
-    <!-- ★★★★★ この行を削除します ★★★★★ -->
-    <!-- <script src="https://cdn.jsdelivr.net/npm/event-source-polyfill@1.0.31/src/eventsource.min.js"></script> -->
+    <!-- ★★★ 外部JavaScriptファイルの読み込み ★★★ -->
     
+    <!-- 1. マークダウンパーサー 'marked.js' を読み込む -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- 2. あなたのカスタムスクリプトを読み込む -->
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
