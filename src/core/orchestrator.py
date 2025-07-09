@@ -56,19 +56,27 @@ class Orchestrator:
         is_discussion_needed = any(keyword in user_message for keyword in ["提案", "アイデア", "どう思う", "考えて"])
 
         if not is_discussion_needed:
-            yield {"status": "thinking", "message": "（アークが担当します...）", "log": "..."}
+            # シングルエージェントモードでもspeaker情報を追加
+            yield {"status": "thinking", "speaker": "ak", "message": "（アークが担当します...）", "log": "シングルエージェントモードで実行します。"}
             yield from self.agents["ak"].chat_generator(user_message)
         else:
             # --- マルチエージェント・モード（相談・議論） ---
-            yield {"status": "thinking", "message": "（みんなで考えています...）", "log": "複雑なタスクと判断。マルチエージェントでの議論を開始します。"}
+            yield {"status": "thinking", "speaker": "orchestrator", "message": "（みんなで考えています...）", "log": "複雑なタスクと判断。マルチエージェントでの議論を開始します。"}
             
             opinions = {}
             for name, agent in self.agents.items():
                 print(f"\n[ORCHESTRATOR] >> エージェント '{name}' に意見を要請...")
                 opinions[name] = agent.get_initial_idea(user_message)
                 print(f"[ORCHESTRATOR] << エージェント '{name}' の意見:\n---\n{opinions[name]}\n---")
+                # 各エージェントの意見をspeaker情報と共にyield
+                yield {
+                    "status": "agent_opinion",
+                    "speaker": name,
+                    "message": opinions[name],
+                    "log": f"エージェント '{name}' からの意見を受信しました。"
+                }
 
-            yield {"status": "thinking", "message": "（オラクルがまとめています...）", "log": "オラクルによる意見の統合を開始"}
+            yield {"status": "thinking", "speaker": "oracle", "message": "（オラクルがまとめています...）", "log": "オラクルによる意見の統合を開始"}
             
             oracle_prompt = self._build_oracle_prompt(user_message, opinions)
             print(f"\n[ORCHESTRATOR] >> オラクルへの最終指示:\n---\n{oracle_prompt}\n---")
@@ -88,6 +96,7 @@ class Orchestrator:
             
             yield {
                 "status": "final_answer",
+                "speaker": "oracle",
                 "message": final_message,
                 "log": "最終的な応答を生成しました。"
             }

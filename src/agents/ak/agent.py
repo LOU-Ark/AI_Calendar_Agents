@@ -10,7 +10,7 @@ from src.calendar_agent import tools
 
 class AKAgent:
     def __init__(self, user_profile: str):
-        persona_path = os.path.join(os.path.dirname(__file__), 'ak-persona.md')
+        persona_path = os.path.join('knowledge', 'ak-persona.md')
         with open(persona_path, 'r', encoding='utf-8') as f:
             self.persona = f.read()
         
@@ -66,6 +66,7 @@ class AKAgent:
                     final_message = parsed.get('final_answer', 'うまく言葉にできませんでした。')
                     yield {
                         "status": "final_answer",
+                        "speaker": "ak",
                         "message": final_message,
                         "log": f"アーク：Final Answer: {final_message}"
                     }
@@ -77,24 +78,35 @@ class AKAgent:
                     # ツール実行のロジック
                     tool_name = action
                     tool_input = parsed.get('action_input', {})
-                    yield { "status": "tool_running", "message": f"ツール『{tool_name}』を実行中...", "log": f"ツール実行: {tool_name}({tool_input})"}
+                    yield {
+                        "status": "tool_running",
+                        "speaker": "ak",
+                        "message": f"ツール『{tool_name}』を実行中...",
+                        "log": f"ツール実行: {tool_name}({tool_input})"}
                     tool_result = self._run_tool(tool_name, tool_input)
                     history.append({"tool": tool_name, "result": tool_result})
                 else:
                     # パースエラーなどの場合は、それを伝えて終了
                     error_message = parsed.get('action_input', 'AIの応答を解析できませんでした。')
-                    yield { "status": "final_answer", "message": f"申し訳ありません、少し混乱しているようです。エラー: {error_message}", "log": "パースエラーにより終了します。" }
+                    yield { "status": "final_answer", "speaker": "ak",
+                            "message": f"申し訳ありません、少し混乱しているようです。エラー: {error_message}",
+                            "log": "パースエラーにより終了します。" }
                     return
 
             except Exception as e:
                 print(f"[AGENT ERROR] chat_generatorでエラーが発生: {e}")
                 import traceback
                 traceback.print_exc()
-                yield {"status": "error", "message": "エージェント内部でエラーが発生しました。"}
+                yield {"status": "error", "speaker": "ak", "message": "エージェント内部でエラーが発生しました。"}
                 return
 
         # ループが5回に達した場合のフォールバック
-        yield { "status": "final_answer", "message": "うーん、少し考えがまとまらないようです。もう少し簡単な言葉で指示をいただけますか？", "log": "ループ回数上限に到達。" }
+        yield {
+            "status": "final_answer",
+            "speaker": "ak",
+            "message": "うーん、少し考えがまとまらないようです。もう少し簡単な言葉で指示をいただけますか？",
+            "log": "ループ回数上限に到達。"
+        }
 
     def get_initial_idea(self, user_message: str) -> str:
         """

@@ -10,7 +10,7 @@ from src.calendar_agent import tools
 
 class AEAgent:
     def __init__(self, user_profile: str):
-        persona_path = os.path.join(os.path.dirname(__file__), 'ae-persona.md')
+        persona_path = os.path.join('knowledge', 'ae-persona.md')
         with open(persona_path, 'r', encoding='utf-8') as f:
             self.persona = f.read()
         
